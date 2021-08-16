@@ -4,6 +4,8 @@ from ibapi.contract import Contract
 from ibapi.ticktype import TickTypeEnum
 from ibapi.order import *
 from threading import Timer
+import threading
+import time
 import random
 
 class TestApp(EClient, EWrapper):
@@ -27,7 +29,7 @@ class Bot:
     def __init__(self):
         self.rand = random.randrange(0,500)
         self.app=TestApp()
-        self.app.connect("127.0.0.1", 7497,rand)
+        self.app.connect("127.0.0.1", 7497,self.rand)
         app_thread = threading.Thread(target=self.run_loop, daemon=True)
         app_thread.start()
         time.sleep(1)
@@ -39,10 +41,10 @@ class Bot:
         contract.currency = "USD"
         contract.primaryExchange = "NASDAQ"
 
-        self.app.reqRealTimeBars(0, ontract, 5, "TRADES", 1, [])
+        # self.app.reqRealTimeBars(0, contract, 5, "TRADES", 1, [])
 
-        # self.app.reqMarketDataType(3) # switch to delayed-frozen data if live not available
-        # app.reqMktData(1, contract, "", False, False, [])
+        self.app.reqMarketDataType(1) # switch to delayed-frozen data if live not available
+        self.app.reqMktData(1, contract, "", False, False, [])
 
 
     def run_loop(self):
