@@ -83,7 +83,7 @@ class Bot:
     # endDate = 12312020
     # get historical data from SPY and run strategies
     # keep track of SPY self.shares
-        self.cash = 20000
+        self.cash = 25000
         self.startingCash = self.cash
         self.shares = 0
         self.opentrades = 0
@@ -101,15 +101,16 @@ class Bot:
 
         self.tickerName = contract.symbol
 
-        dt = ''
+        dt = '20160131 00:00:00 PST'
         # self.barsList = []
         # while True:
+        self.backtestPeriod = '10 Y'
         self.bars = ib.reqHistoricalData(
             contract,
             endDateTime=dt,
             # 252 trading days a year
-            durationStr='6 M',
-            barSizeSetting='5 mins',
+            durationStr=self.backtestPeriod,
+            barSizeSetting='1 day',
             whatToShow='TRADES',
             useRTH=True,
             formatDate=1)
@@ -125,14 +126,17 @@ class Bot:
         #plt.show()
         self.currentHigh = self.bars[0].high
         total = 0
+        total100 = 0
         self.pdCash = []
         self.pdCash.append(self.cash)
         self.sigPriceBuy = []
         self.sigPriceSell = []
         self.sma50Tracker = []
+        self.sma100Tracker = []
 
 
         for b in range(0, len(self.bars)):
+            print(str(self.bars[b].date))
             self.pdCash.append(self.cash + (self.shares * self.bars[b].close))
 
             #print("Scanning next bar. Current shares: " + str(self.shares) + "\t Current Money: " + str(self.cash))
@@ -140,20 +144,31 @@ class Bot:
             self.backTestingStrategy1_v2(self.bars[b])
 
             #strat 2#################################
-            count = 0
             if b > 50:
                 #print("Here")
                 for i in range (b-50, b):
                     total += self.bars[i].close
-                    count += 1
-                #print(count)
                 self.sma50 = total/50
                 self.sma50Tracker.append(self.sma50)
+                # self.sma100Tracker.append(np.nan)
                 total = 0
                 #print("SMA: " + str(self.sma50))
                 #self.backTestingStrategy2(self.bars[b], self.sma50)
+                #self.backTestingStrategy4(self.bars[b],self.sma50)
+                if b > 100:
+                    for i in range (b-100, b):
+                        total100 += self.bars[i].close
+                    self.sma100 = total100/100
+                    total100 = 0
+                    self.sma100Tracker.append(self.sma100)
+                    #self.backTestingStrategy_50cross100(self.bars[b], self.sma50, self.sma100)
+                else:
+                    # self.sigPriceBuy.append(np.nan)
+                    # self.sigPriceSell.append(np.nan)
+                    self.sma100Tracker.append(np.nan)
             else:
                 self.sma50Tracker.append(np.nan)
+                self.sma100Tracker.append(np.nan)
                 # self.sigPriceBuy.append(np.nan)
                 # self.sigPriceSell.append(np.nan)
             #print(b.close)##################################################
@@ -164,14 +179,20 @@ class Bot:
         #print(self.pdCash)
         plt.figure(figsize=(12.6, 4.6))
         self.dfPanda['50SMA'] = self.sma50Tracker
+        self.dfPanda['100SMA'] = self.sma100Tracker
         self.dfPanda['Buy_Signal'] = self.sigPriceBuy
         self.dfPanda['Sell_Signal'] = self.sigPriceSell
         plt.plot(self.dfPanda['close'], label = 'Close', alpha = 0.35)
         plt.plot(self.dfPanda['50SMA'], label = '50SMA', alpha = 0.35)
+        plt.plot(self.dfPanda['100SMA'], label = '100SMA', alpha = 0.35)
         plt.scatter(self.dfPanda.index, self.dfPanda['Buy_Signal'], label = 'Buy', marker = '^', color = 'green')
         plt.scatter(self.dfPanda.index, self.dfPanda['Sell_Signal'], label = 'Sell', marker = 'v', color = 'red')
+        plt.title(self.tickerName + ": Start: \$" + str(round(self.startingCash,2)) + " ---> \$" + str(round(self.cash,2)) + "   (" +str(round(((self.cash-self.startingCash)/self.startingCash)*100,2)) + "%)" )
+        plt.xlabel(self.backtestPeriod)
+        plt.ylabel("Close Price")
+        plt.legend(loc='upper left')
 
-        print("==== END STATS AFTER 504 TRADING DAYS ====")
+        print("==== END STATS AFTER " + self.backtestPeriod + " ====")
         print("Starting cash: $" + str(self.startingCash))
         print("Ending cash: $" + str(self.cash))
         print("% Gain/Loss: " + str(((self.cash-self.startingCash)/self.startingCash)*100) + "%")
@@ -211,7 +232,7 @@ class Bot:
         self.shares = 0
         #self.pdCash.append(self.cash)
 
-    # Currently only for daily candles
+    # Currently only for daily candles, basic 50ma strat
     def backTestingStrategy2(self, bar, sma50):
         if (bar.open > sma50) and (self.opentrades < 1):
             self.currentHigh = bar.high
@@ -261,110 +282,137 @@ class Bot:
 
 
         # Simple dip buy strategy, this one includes a wait condition after selling
-        def backTestingStrategy1_v2(self, bar):
-            if (bar.open <= self.currentHigh * 0.98) and (self.opentrades < 1) and (self.recentlySold < 1):
-                self.currentHigh = bar.close
-                #print("Setting currentHigh to: " + str(bar.close))
-                self.historicalPlaceBuyOrder(bar.open, bar.date)
-                self.sigPriceBuy.append(bar.open)
-                self.sigPriceSell.append(np.nan)
-                self.opentrades = 1
-            if (bar.open >= self.currentLow * 1.015) and (self.opentrades < 1) and (self.recentlySold >= 1):
-                self.currentHigh = bar.close
-                #print("Setting currentHigh to: " + str(bar.close))
-                self.historicalPlaceBuyOrder(bar.open, bar.date)
-                self.sigPriceBuy.append(bar.open)
-                self.sigPriceSell.append(np.nan)
-                self.opentrades = 1
-            elif self.opentrades >= 1:
-                if bar.close <= self.currentHigh * 0.97:
-                    self.currentLow = bar.low
-                    self.recentlySold = 1
-                    self.historicalPlaceSellOrder(bar.open, bar.date)
-                    self.sigPriceSell.append(bar.close)
-                    self.sigPriceBuy.append(np.nan)
-                    self.opentrades = 0
-                else:
-                    self.sigPriceBuy.append(np.nan)
-                    self.sigPriceSell.append(np.nan)
-            else:
-                self.sigPriceBuy.append(np.nan)
-                self.sigPriceSell.append(np.nan)
-            if bar.close > self.currentHigh:
-                self.currentHigh = bar.close
-                #print("Setting currentHigh to: " + str(bar.close))
 
-        # 3) Bounce off of 50SMA
-        #   if above 50SMA and touches it ---> buy
-        #       if falls x% below 50SMA ---> sell
-        #       set a trailing stop loss otherwise
-        def backTestingStrategy4(self, bar, sma50):
-            if bar.low >= sma50:
-                isAbove50SMA = True
-            else:
-                isAbove50SMA = False
-            if (isAbove50SMA) and (bar.low <= sma50 * 0.99) and (self.opentrades < 1):
-                self.currentHigh = bar.high
-                self.historicalPlaceBuyOrder(bar.open, bar.date)
-                self.sigPriceBuy.append(bar.open)
-                self.sigPriceSell.append(np.nan)
-                self.opentrades = 1
-            elif self.opentrades >= 1:
-                if bar.close < self.currentHigh*0.98:
-                    self.historicalPlaceSellOrder(bar.close, bar.date)
-                    self.sigPriceSell.append(bar.close)
-                    self.sigPriceBuy.append(np.nan)
-                    self.opentrades = 0
-                else:
-                    self.sigPriceSell.append(np.nan)
-                    self.sigPriceBuy.append(np.nan)
+    # Simple dip buy strategy, waits to buy after a rise off of new low
+    def backTestingStrategy1_v2(self, bar):
+        if (bar.open <= self.currentHigh * 0.98) and (self.opentrades < 1) and (self.recentlySold < 1):
+            self.currentHigh = bar.close
+            #print("Setting currentHigh to: " + str(bar.close))
+            self.historicalPlaceBuyOrder(bar.open, bar.date)
+            self.sigPriceBuy.append(bar.open)
+            self.sigPriceSell.append(np.nan)
+            self.opentrades = 1
+        elif (bar.open >= self.currentLow * 1.015) and (self.opentrades < 1) and (self.recentlySold >= 1):
+            self.currentHigh = bar.close
+            #print("Setting currentHigh to: " + str(bar.close))
+            self.historicalPlaceBuyOrder(bar.open, bar.date)
+            self.sigPriceBuy.append(bar.open)
+            self.sigPriceSell.append(np.nan)
+            self.opentrades = 1
+        elif self.opentrades >= 1:
+            if bar.close <= self.currentHigh * 0.99:
+                self.currentLow = bar.low
+                self.recentlySold = 1
+                self.historicalPlaceSellOrder(bar.open, bar.date)
+                self.sigPriceSell.append(bar.close)
+                self.sigPriceBuy.append(np.nan)
+                self.opentrades = 0
             else:
                 self.sigPriceBuy.append(np.nan)
                 self.sigPriceSell.append(np.nan)
-            if bar.high > self.currentHigh:
-                self.currentHigh = bar.high
+        else:
+            self.sigPriceBuy.append(np.nan)
+            self.sigPriceSell.append(np.nan)
+        if bar.close > self.currentHigh:
+            self.currentHigh = bar.close
+        if bar.low < self.currentLow:
+            self.currentLow = bar.low
+            #print("Setting currentHigh to: " + str(bar.close))
+
+    # 3) Bounce off of 50SMA
+    #   if above 50SMA and touches it ---> buy
+    #       NOT IMPLEMENTED YET:   if falls 2% below 50SMA ---> sell
+    #       set a trailing stop loss otherwise 2%
+    def backTestingStrategy4(self, bar, sma50):
+        if bar.low >= sma50:
+            isAbove50SMA = True
+        else:
+            isAbove50SMA = False
+        if (isAbove50SMA) and (bar.low >= sma50 * 0.98) and (self.opentrades < 1):
+            self.currentHigh = bar.high
+            self.historicalPlaceBuyOrder(bar.open, bar.date)
+            self.sigPriceBuy.append(bar.open)
+            self.sigPriceSell.append(np.nan)
+            self.opentrades = 1
+        elif self.opentrades >= 1:
+            if bar.close < self.currentHigh*0.97:
+                self.historicalPlaceSellOrder(bar.close, bar.date)
+                self.sigPriceSell.append(bar.close)
+                self.sigPriceBuy.append(np.nan)
+                self.opentrades = 0
+            else:
+                self.sigPriceSell.append(np.nan)
+                self.sigPriceBuy.append(np.nan)
+        else:
+            self.sigPriceBuy.append(np.nan)
+            self.sigPriceSell.append(np.nan)
+        if bar.high > self.currentHigh:
+            self.currentHigh = bar.high
+
+    def backTestingStrategy_50cross100(self, bar, ma50, ma100):
+        # if bar.low >= sma50:
+        #     isAbove50SMA = True
+        # else:
+        #     isAbove50SMA = False
+        # if bar.low >= sma100:
+        #     isAbove100SMA = True
+        # else:
+        #     isAbove100SMA = False
+        if (self.opentrades < 1) and (ma50 > ma100):
+            self.historicalPlaceBuyOrder(bar.open, bar.date)
+            self.sigPriceBuy.append(bar.open)
+            self.sigPriceSell.append(np.nan)
+            self.opentrades = 1
+        elif (ma50 < ma100 * 0.995) and (self.opentrades >= 1):
+            self.historicalPlaceSellOrder(bar.open, bar.date)
+            self.sigPriceSell.append(bar.close)
+            self.sigPriceBuy.append(np.nan)
+            self.opentrades = 0
+        else:
+            self.sigPriceBuy.append(np.nan)
+            self.sigPriceSell.append(np.nan)
 
 bot = Bot()
 ################# 50 MA ####################
 #
 #     def sma50(ticker) --> returns 50ma int
 #
-contract = Contract()
-contract.symbol = "AAPL"
-contract.secType = "STK"
-contract.exchange = "SMART"
-contract.currency = "USD"
-contract.primaryExchange = "NASDAQ"
-
-dt = ''
-maBarsList = []
-maBars = ib.reqHistoricalData(
-    contract,
-    endDateTime=dt,
-    # 252 trading days a year
-    durationStr='50 D',
-    barSizeSetting='1 day',
-    whatToShow='TRADES',
-    useRTH=True,
-    formatDate=1)
-######maBarsList.append(maBars)
-######dt = maBars[0].date
-######print(dt)
-total = 0
-count = 1
-for b in range (0, len(maBars)):
-    total += maBars[b].close
-    #print(count)
-    #print(maBars[b].close)
-    #count += 1
-# for b in range (0, len(maBars)-1):
+# contract = Contract()
+# contract.symbol = "AAPL"
+# contract.secType = "STK"
+# contract.exchange = "SMART"
+# contract.currency = "USD"
+# contract.primaryExchange = "NASDAQ"
+#
+# dt = ''
+# maBarsList = []
+# maBars = ib.reqHistoricalData(
+#     contract,
+#     endDateTime=dt,
+#     # 252 trading days a year
+#     durationStr='50 D',
+#     barSizeSetting='1 day',
+#     whatToShow='TRADES',
+#     useRTH=True,
+#     formatDate=1)
+# ######maBarsList.append(maBars)
+# ######dt = maBars[0].date
+# ######print(dt)
+# total = 0
+# count = 1
+# for b in range (0, len(maBars)):
 #     total += maBars[b].close
-#     print(count)
-#     print(maBars[b].close)
-#     count += 1
-sma = total / 50
-
-print(sma)
+#     #print(count)
+#     #print(maBars[b].close)
+#     #count += 1
+# # for b in range (0, len(maBars)-1):
+# #     total += maBars[b].close
+# #     print(count)
+# #     print(maBars[b].close)
+# #     count += 1
+# sma = total / 50
+#
+# #print(sma)
 
 
 
