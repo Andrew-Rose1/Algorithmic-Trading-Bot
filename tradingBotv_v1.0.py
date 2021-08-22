@@ -83,7 +83,7 @@ class Bot:
     # endDate = 12312020
     # get historical data from SPY and run strategies
     # keep track of SPY self.shares
-        self.cash = 25000
+        self.cash = 5000
         self.startingCash = self.cash
         self.shares = 0
         self.opentrades = 0
@@ -93,7 +93,7 @@ class Bot:
 
 
         contract = Contract()
-        contract.symbol = "SPY"
+        contract.symbol = "PXLW"
         contract.secType = "STK"
         contract.exchange = "SMART"
         contract.currency = "USD"
@@ -101,16 +101,17 @@ class Bot:
 
         self.tickerName = contract.symbol
 
-        dt = '20160131 00:00:00 PST'
+        #dt = '20160131 00:00:00 PST'
+        dt = ''
         # self.barsList = []
         # while True:
-        self.backtestPeriod = '10 Y'
+        self.backtestPeriod = '1 D'
         self.bars = ib.reqHistoricalData(
             contract,
             endDateTime=dt,
             # 252 trading days a year
             durationStr=self.backtestPeriod,
-            barSizeSetting='1 day',
+            barSizeSetting='1 min',
             whatToShow='TRADES',
             useRTH=True,
             formatDate=1)
@@ -133,16 +134,23 @@ class Bot:
         self.sigPriceSell = []
         self.sma50Tracker = []
         self.sma100Tracker = []
+        self.profits = []
+        self.percentGains = []
 
 
         for b in range(0, len(self.bars)):
-            print(str(self.bars[b].date))
+            #print(str(self.bars[b].date))
             self.pdCash.append(self.cash + (self.shares * self.bars[b].close))
 
+#### Check if 3 Days since PTD
+        #    for i in range (-5, 0, 1):
+            #    print(i)
             #print("Scanning next bar. Current shares: " + str(self.shares) + "\t Current Money: " + str(self.cash))
             #self.backTestingStrategy1(self.bars[b])
-            self.backTestingStrategy1_v2(self.bars[b])
-
+            print(self.bars[b])
+            self.NioStrategy2(self.bars[b])
+            #self.backTestingStrategy1_v2(self.bars[b])
+            #print(self.bars[b].date)
             #strat 2#################################
             if b > 50:
                 #print("Here")
@@ -177,6 +185,7 @@ class Bot:
             self.pdCash.append(self.cash)
         #dfCash = util.df(self.pdCash)
         #print(self.pdCash)
+        #util.barplot(self.bars)
         plt.figure(figsize=(12.6, 4.6))
         self.dfPanda['50SMA'] = self.sma50Tracker
         self.dfPanda['100SMA'] = self.sma100Tracker
@@ -201,13 +210,18 @@ class Bot:
         # print("self.trades:")
         f = open("trades.csv", "w", newline = '')
         writer = csv.writer(f)
-        for i in self.trades:
+        writer.writerow([" "," "," "," "," "," ","Totals:", self.cash-self.startingCash, ((self.cash-self.startingCash)/self.startingCash)*100])
+        for i in range (0, len(self.trades)):
             #writer.writerow([i[:10], i[11:15], i[-6:], i[29:31]])
             #print(i[0], i[1], i[2], i[3])
             #writer.writerow([i[0], i[1], i[2], i[3], i[4], i[5]])
-            writer.writerow([i[0], i[1], i[2], i[3], i[4], i[5]])
+            writer.writerow([self.trades[i][0], self.trades[i][1], self.trades[i][2], self.trades[i][3], self.trades[i][4], self.trades[i][5], ' ', round(self.profits[i],2), self.percentGains[i]])
             #print(i)
         f.close()
+
+        #for i in range (0, len(self.profits)):
+            #print(str(round(self.profits[i],2)) + "   " + str(round(self.percentGains[i],2)))
+
         plt.show()
 
 
@@ -220,6 +234,9 @@ class Bot:
       # trade = [self.tickerName, str(time), str(tempshares), str(buyIn), "buy", "currentHigh*0.97: " + str(self.currentHigh*0.97), "50SMA: " + str(sma50)]
 
         self.trades.append(trade)
+        self.profits.append(np.nan)
+        self.percentGains.append(np.nan)
+
         #print("Adding to self.trades: " + str(time) + ": " + str(tempshares) + " shares of SPY bought at " + str(buyIn))
         #hardStopLoss = buyIn * 0.93
 
@@ -227,7 +244,11 @@ class Bot:
         trade = [self.tickerName, str(time), str(self.shares), str(sellOut), "sell", "currentHigh*0.97: " + str(self.currentHigh*0.97)]
         #trade = [self.tickerName, str(time), str(self.shares), str(sellOut), "sell", "currentHigh*0.97: " + str(self.currentHigh*0.97), "50SMA: " + str(sma50)]
         #print("Adding to self.trades: " + str(time) + ": " + str(self.shares) + " shares of SPY sold at " + str(sellOut))
+        profit = (float(trade[3]) - float(self.trades[-1][3])) * int(self.trades[-1][2])
+        percentGain = profit/(int(self.trades[-1][2])*float(self.trades[-1][3]))
         self.trades.append(trade)
+        self.profits.append(profit)
+        self.percentGains.append(percentGain)
         self.cash += self.shares * sellOut
         self.shares = 0
         #self.pdCash.append(self.cash)
@@ -371,6 +392,77 @@ class Bot:
         else:
             self.sigPriceBuy.append(np.nan)
             self.sigPriceSell.append(np.nan)
+
+    # Simple dip buy strategy
+    def NioStrategy1(self, bar):
+        if (bar.open <= self.currentHigh * 0.95) and (self.opentrades < 1):
+            self.currentHigh = bar.close
+            #print("Setting currentHigh to: " + str(bar.close))
+            self.historicalPlaceBuyOrder(bar.open, bar.date)
+            self.sigPriceBuy.append(bar.open)
+            self.sigPriceSell.append(np.nan)
+            self.opentrades = 1
+        elif self.opentrades >= 1:
+            if bar.close <= self.currentHigh * 0.98:
+                self.historicalPlaceSellOrder(bar.open, bar.date)
+                self.sigPriceSell.append(bar.close)
+                self.sigPriceBuy.append(np.nan)
+                self.opentrades = 0
+            else:
+                self.sigPriceBuy.append(np.nan)
+                self.sigPriceSell.append(np.nan)
+        else:
+            self.sigPriceBuy.append(np.nan)
+            self.sigPriceSell.append(np.nan)
+        if bar.close > self.currentHigh:
+            self.currentHigh = bar.close
+            #print("Setting currentHigh to: " + str(bar.close))
+
+    def NioStrategy2(self, bar):
+        eod = bar.date.replace(hour=12, minute=50)
+        print(bar.date)
+        print(eod)
+        if (bar.open <= self.currentHigh * 0.97) and (self.opentrades < 1) and (self.recentlySold < 1):
+            self.currentHigh = bar.close
+            #print("Setting currentHigh to: " + str(bar.close))
+            self.historicalPlaceBuyOrder(bar.open, bar.date)
+            #self.ptd[bar.date] = True
+            self.sigPriceBuy.append(bar.open)
+            self.sigPriceSell.append(np.nan)
+            self.opentrades = 1
+        elif (bar.open >= self.currentLow * 1.015) and (self.opentrades < 1) and (self.recentlySold >= 1):
+            self.currentHigh = bar.close
+            #print("Setting currentHigh to: " + str(bar.close))
+            self.historicalPlaceBuyOrder(bar.open, bar.date)
+            self.sigPriceBuy.append(bar.open)
+            self.sigPriceSell.append(np.nan)
+            self.opentrades = 1
+        elif self.opentrades >= 1:
+            if bar.close <= self.currentHigh * 0.955:
+                self.currentLow = bar.low
+                self.recentlySold = 1
+                self.historicalPlaceSellOrder(bar.open, bar.date)
+                self.sigPriceSell.append(bar.close)
+                self.sigPriceBuy.append(np.nan)
+                self.opentrades = 0
+            elif bar.date >= eod:
+                self.historicalPlaceSellOrder(bar.open, bar.date)
+                self.sigPriceSell.append(bar.close)
+                self.sigPriceBuy.append(np.nan)
+                self.opentrades = 0
+                self.currentLow = bar.low
+            else:
+                self.sigPriceBuy.append(np.nan)
+                self.sigPriceSell.append(np.nan)
+
+        else:
+            self.sigPriceBuy.append(np.nan)
+            self.sigPriceSell.append(np.nan)
+        if bar.close > self.currentHigh:
+            self.currentHigh = bar.close
+        if bar.low < self.currentLow:
+            self.currentLow = bar.low
+            #print("Setting currentHigh to: " + str(bar.close))
 
 bot = Bot()
 ################# 50 MA ####################
