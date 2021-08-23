@@ -1,9 +1,11 @@
 from ib_insync import *
 from datetime import datetime
 import numpy as np
+import time
+import math
 
 ib = IB()
-ib.connect('127.0.0.1', 7497, clientId=16)
+ib.connect('127.0.0.1', 7497, clientId=1)
 
 class NioBot:
     def __init__(self):
@@ -12,7 +14,10 @@ class NioBot:
         print(self.now)
         print(self.dayStart)
         print(self.now - self.dayStart)
-        self.currntHigh = 0
+        self.currentHigh = 0
+        self.currentLow = 0
+        self.opentrades = 0
+        self.recentlySold = 0
 
         sub = ScannerSubscription(
             instrument='STK',
@@ -33,17 +38,21 @@ class NioBot:
 
 
 
-
-        #for i in symbols:
-            #print(i)
-            #stock = Stock('FLGC', 'SMART', 'USD')
+        #
+        # for i in symbols:
+        #     print(i)
+        #     stock = Stock(i, 'SMART', 'USD')
+        #     market_data = ib.reqMktData(stock, '', False, False)
+        #     time.sleep(2)
+        #     ib.pendingTickersEvent += self.onPendingTicker
         #self.catchUp(stock)
         #self.scannerTest()
 
-        for i in symbols:
-            print(i)
-            stock = Stock(i, 'SMART', 'USD')
-            self.catchUp(stock)
+        # for i in symbols:
+        #     print(i)
+        stock = Stock('AAPL', 'SMART', 'USD')
+        self.catchUp(stock)
+            #time.sleep(2)
             #market_data = ib.reqMktData(stock, '', False, False)
             #ib.pendingTickersEvent += self.onPendingTicker
         ib.run()
@@ -51,8 +60,8 @@ class NioBot:
 
     def onPendingTicker(self, ticker):
         print("pending ticker event recieved")
-        # print(ticker)
-        print(type(ticker))
+        print(ticker)
+        #print(type(ticker))
         # d = {i: (c.contract.symbol, c.close) for (i, c) in enumerate(tickers)}
         # ib.loopUntil(any(np.isnan(val) for val in d.values()), len(tickers))
         #self.NioStrategy2(ticker)
@@ -77,24 +86,33 @@ class NioBot:
         print(symbols)
 
     def catchUp(self, contract):
-        self.bars = ib.reqHistoricalData(
-            contract,
-            endDateTime='',
-            durationStr='60 S',
-            barSizeSetting='1 secs',
-            whatToShow='TRADES',
-            useRTH=True,
-            formatDate=1,
-            keepUpToDate=True)
-        self.bars.updateEvent += self.onBarUpdate
-        self.currentHOD = max(self.bars)
-        self.currentHight = self.currentHOD
+        total = []
+        # bars1 = ib.reqHistoricalData(
+        #     contract,
+        #     endDateTime='',
+        #     durationStr='60 S',
+        #     barSizeSetting='1 secs',
+        #     whatToShow='TRADES',
+        #     useRTH=True,
+        #     formatDate=1,
+        #     keepUpToDate=True)
+        #     #time.sleep(2)
+        # for i in bars1:
+        #     total.append(i.high)
+        # self.currentHOD = max(total)
+        # self.currentLOD = min(total)
+        # total.clear()
+        # self.currentHigh = self.currentHOD
+        # self.currentLow = self.currentLOD
+        bars = ib.reqRealTimeBars(contract, 1, 'MIDPOINT', False)
+        bars.updateEvent += self.onBarUpdate
         #print(len(self.bars))
 
-    def onBarUpdate(self, bar):
+    def onBarUpdate(self, bar, hasNewBar):
         print("pending bar event recieved")
-        self.NioStrategy2_bar(bar)
-        print(bar)
+        print("open: " + str(bar[-1].open_))
+        self.backTestingStrategy1_v3(bar[-1])
+        #print(bar[-1].close)
 
     # def NioStrategy1(self, bar):
     #     if (bar.open <= self.currentHigh * 0.98) and (self.opentrades < 1) and (self.recentlySold < 1):
@@ -133,24 +151,25 @@ class NioBot:
 
     # Simple dip buy strategy, waits to buy after a rise off of new low (PENNYSTOCKS)
     def backTestingStrategy1_v3(self, bar):
-        if (bar.open <= self.currentHigh * 0.98) and (self.opentrades < 1) and (self.recentlySold < 1):
+        print("currentHigh: " + str(self.currentHigh))
+        if (bar.open_ <= self.currentHigh - 0.02) and (self.opentrades < 1) and (self.recentlySold < 1):
             self.currentHigh = bar.close
-            self.historicalPlaceBuyOrder(bar.open, bar.date)
+            self.historicalPlaceBuyOrder(bar.open_, bar.time)
             self.opentrades = 1
-        elif (bar.open >= self.currentLow * 1.02) and (self.opentrades < 1) and (self.recentlySold >= 1):
+        elif (bar.open_ >= self.currentLow * 1.02) and (self.opentrades < 1) and (self.recentlySold >= 1):
             self.currentHigh = bar.close
-            self.historicalPlaceBuyOrder(bar.open, bar.date)
+            self.historicalPlaceBuyOrder(bar.open_, bar.time)
             self.opentrades = 1
         elif self.opentrades >= 1:
-            if bar.open <= self.currentHigh * 0.95:
+            if bar.open_ <= self.currentHigh * 0.95:
                 self.currentLow = bar.low
                 self.recentlySold = 1
-                self.historicalPlaceSellOrder(bar.open, bar.date)
+                self.historicalPlaceSellOrder(bar.open_, bar.time)
                 self.opentrades = 0
-        if bar.open > self.currentHigh:
-            self.currentHigh = bar.open
-        if bar.open < self.currentLow:
-            self.currentLow = bar.open
+        if bar.high > self.currentHigh:
+            self.currentHigh = bar.high
+        if bar.low < self.currentLow:
+            self.currentLow = bar.low
 
     def NioStrategy2(self, tick):
         eod = tick.time.replace(hour=12, minute=50)
@@ -203,25 +222,28 @@ class NioBot:
             self.currentLow = bar.low
 
     def historicalPlaceBuyOrder(self, buyIn, time):
-        stock = Stock(ticker, 'SMART', 'USD')
+        #stock = Stock(ticker, 'SMART', 'USD')
+        stock = Stock('AAPL', 'SMART', 'USD')
 
-        raw_balance = ib.accountSummary('DU4271259')
-        for av in raw_balance:
-            if av.tag == 'AvailableFunds':
-                self.currentBalance = float(av.value)
+        # raw_balance = ib.accountSummary('DU4271259')
+        # for av in raw_balance:
+        #     if av.tag == 'AvailableFunds':
+        #         self.currentBalance = float(av.value)
 
-        order = MarketOrder('BUY', mathfloor(6500/buyIn))
-        trade = ib.placeOrde(stock, order)
-        print(str(datetime.now()) + " -- " + str(shares) + " shares of " + ticker.symbol + " bought at $" + str(sellOut))
+        order = MarketOrder('BUY', 20)
+        trade = ib.placeOrder(stock, order)
+        print(str(datetime.now()) + " -- " + str(20) + " shares of " + ticker.symbol + " bought at $")
+        print("BUYING")
 
 
     def historicalPlaceSellOrder(self, ticker, sellOut):
-        stock = Stock(ticker, 'SMART', 'USD')
-        openPositions = ib.positions()
-        shares = openPositions[0].position
-        order = MarketOrder('Sell', shares)
-        trade = ib.placeOrde(stock, order)
-        print(str(datetime.now()) + " -- " + str(shares) + " shares of " + ticker.symbol + " sold at $" + str(sellOut))
+        # stock = Stock(ticker, 'SMART', 'USD')
+        # openPositions = ib.positions()
+        # shares = openPositions[0].position
+        # order = MarketOrder('Sell', shares)
+        # trade = ib.placeOrde(stock, order)
+        # print(str(datetime.now()) + " -- " + str(shares) + " shares of " + ticker.symbol + " sold at $" + str(sellOut))
+        print("Selling")
 
 
 NioBot = NioBot()
