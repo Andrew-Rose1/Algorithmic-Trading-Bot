@@ -85,7 +85,7 @@ class Bot:
     # endDate = 12312020
     # get historical data from SPY and run strategies
     # keep track of SPY self.shares
-        self.cash = 6500
+        self.cash = 85000
         self.startingCash = self.cash
         self.shares = 0
         self.opentrades = 0
@@ -95,7 +95,7 @@ class Bot:
 
 
         contract = Contract()
-        contract.symbol = "PXLW"
+        contract.symbol = "ES"
         contract.secType = "STK"
         contract.exchange = "SMART"
         contract.currency = "USD"
@@ -107,13 +107,13 @@ class Bot:
         dt = ''
         # self.barsList = []
         # while True:
-        self.backtestPeriod = '1 D'
+        self.backtestPeriod = '3 Y'
         self.bars = ib.reqHistoricalData(
             contract,
             endDateTime=dt,
             # 252 trading days a year
             durationStr=self.backtestPeriod,
-            barSizeSetting='1 min',
+            barSizeSetting='15 mins',
             whatToShow='TRADES',
             useRTH=True,
             formatDate=1)
@@ -151,16 +151,15 @@ class Bot:
         #    for i in range (-5, 0, 1):
             #    print(i)
             #print("Scanning next bar. Current shares: " + str(self.shares) + "\t Current Money: " + str(self.cash))
-            #print("DaysLeft: " + str(self.daysLeft))
-            #print(str(self.bars[b].date.date()) + "   " + str(self.bars[b-1].date.date()))
+            print("DaysLeft: " + str(self.daysLeft))
 
             if self.daysLeft == 0:
-                #print("CAN TRADE")
+                print("CAN TRADE")
                 #self.backTestingBreakoutStrategy1(self.bars[b])
                 #self.backTestingStrategy1(self.bars[b])
                 #self.NioStrategy2(self.bars[b])
-                self.backTestingStrategy1_v3(self.bars[b])
-            elif self.bars[b].date.date() != self.bars[b-1].date.date():
+                self.backTestingStrategy1_v2(self.bars[b])
+            elif self.bars[b].date != self.bars[b-1].date:
                 self.daysLeft -= 1
                 self.sigPriceBuy.append(np.nan)
                 self.sigPriceSell.append(np.nan)
@@ -362,7 +361,7 @@ class Bot:
             self.sigPriceSell.append(np.nan)
             self.opentrades = 1
         elif self.opentrades >= 1:
-            if bar.open <= self.currentHigh * 0.99:
+            if bar.close <= self.currentHigh * 0.99:
                 self.currentLow = bar.low
                 self.recentlySold = 1
                 self.historicalPlaceSellOrder(bar.open, bar.date)
@@ -375,47 +374,10 @@ class Bot:
         else:
             self.sigPriceBuy.append(np.nan)
             self.sigPriceSell.append(np.nan)
-        if bar.open > self.currentHigh:
-            self.currentHigh = bar.open
-        if bar.open < self.currentLow:
-            self.currentLow = bar.open
-            #print("Setting currentHigh to: " + str(bar.close))
-
-
-    # Simple dip buy strategy, waits to buy after a rise off of new low (PENNYSTOCKS)
-    def backTestingStrategy1_v3(self, bar):
-        if (bar.open <= self.currentHigh * 0.98) and (self.opentrades < 1) and (self.recentlySold < 1):
+        if bar.close > self.currentHigh:
             self.currentHigh = bar.close
-            #print("Setting currentHigh to: " + str(bar.close))
-            self.historicalPlaceBuyOrder(bar.open, bar.date)
-            self.sigPriceBuy.append(bar.open)
-            self.sigPriceSell.append(np.nan)
-            self.opentrades = 1
-        elif (bar.open >= self.currentLow * 1.02) and (self.opentrades < 1) and (self.recentlySold >= 1):
-            self.currentHigh = bar.close
-            #print("Setting currentHigh to: " + str(bar.close))
-            self.historicalPlaceBuyOrder(bar.open, bar.date)
-            self.sigPriceBuy.append(bar.open)
-            self.sigPriceSell.append(np.nan)
-            self.opentrades = 1
-        elif self.opentrades >= 1:
-            if bar.open <= self.currentHigh * 0.95:
-                self.currentLow = bar.low
-                self.recentlySold = 1
-                self.historicalPlaceSellOrder(bar.open, bar.date)
-                self.sigPriceSell.append(bar.close)
-                self.sigPriceBuy.append(np.nan)
-                self.opentrades = 0
-            else:
-                self.sigPriceBuy.append(np.nan)
-                self.sigPriceSell.append(np.nan)
-        else:
-            self.sigPriceBuy.append(np.nan)
-            self.sigPriceSell.append(np.nan)
-        if bar.open > self.currentHigh:
-            self.currentHigh = bar.open
-        if bar.open < self.currentLow:
-            self.currentLow = bar.open
+        if bar.low < self.currentLow:
+            self.currentLow = bar.low
             #print("Setting currentHigh to: " + str(bar.close))
 
     # 3) Bounce off of 50SMA
@@ -566,7 +528,7 @@ class Bot:
             self.sigPriceSell.append(np.nan)
             self.opentrades = 1
         elif self.opentrades >= 1:
-            if bar.open < self.support*0.99 or bar.open < self.currentHigh*0.955:
+            if bar.open < self.support*0.99 or bar.open < self.currentHigh*0.965:
                 self.historicalPlaceSellOrder(bar.open, bar.date)
                 self.sigPriceSell.append(bar.open)
                 self.sigPriceBuy.append(np.nan)

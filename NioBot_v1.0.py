@@ -3,7 +3,7 @@ from datetime import datetime
 import numpy as np
 
 ib = IB()
-ib.connect('127.0.0.1', 7497, clientId=6)
+ib.connect('127.0.0.1', 7497, clientId=16)
 
 class NioBot:
     def __init__(self):
@@ -87,6 +87,8 @@ class NioBot:
             formatDate=1,
             keepUpToDate=True)
         self.bars.updateEvent += self.onBarUpdate
+        self.currentHOD = max(self.bars)
+        self.currentHight = self.currentHOD
         #print(len(self.bars))
 
     def onBarUpdate(self, bar):
@@ -128,6 +130,27 @@ class NioBot:
     #     if bar.low < self.currentLow:
     #         self.currentLow = bar.low
     #         #print("Setting currentHigh to: " + str(bar.close))
+
+    # Simple dip buy strategy, waits to buy after a rise off of new low (PENNYSTOCKS)
+    def backTestingStrategy1_v3(self, bar):
+        if (bar.open <= self.currentHigh * 0.98) and (self.opentrades < 1) and (self.recentlySold < 1):
+            self.currentHigh = bar.close
+            self.historicalPlaceBuyOrder(bar.open, bar.date)
+            self.opentrades = 1
+        elif (bar.open >= self.currentLow * 1.02) and (self.opentrades < 1) and (self.recentlySold >= 1):
+            self.currentHigh = bar.close
+            self.historicalPlaceBuyOrder(bar.open, bar.date)
+            self.opentrades = 1
+        elif self.opentrades >= 1:
+            if bar.open <= self.currentHigh * 0.95:
+                self.currentLow = bar.low
+                self.recentlySold = 1
+                self.historicalPlaceSellOrder(bar.open, bar.date)
+                self.opentrades = 0
+        if bar.open > self.currentHigh:
+            self.currentHigh = bar.open
+        if bar.open < self.currentLow:
+            self.currentLow = bar.open
 
     def NioStrategy2(self, tick):
         eod = tick.time.replace(hour=12, minute=50)
@@ -187,7 +210,7 @@ class NioBot:
             if av.tag == 'AvailableFunds':
                 self.currentBalance = float(av.value)
 
-        order = MarketOrder('BUY', mathfloor(15000/buyIn))
+        order = MarketOrder('BUY', mathfloor(6500/buyIn))
         trade = ib.placeOrde(stock, order)
         print(str(datetime.now()) + " -- " + str(shares) + " shares of " + ticker.symbol + " bought at $" + str(sellOut))
 
