@@ -6,85 +6,26 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
 
+
+"""
+ -- To Do:
+    --- Have CVS ouput statistics at the top (above all the trades)
+
+"""
+
 plt.style.use('fivethirtyeight')
 
 ib = IB()
 ib.connect('127.0.0.1', 7497, clientId=2)
 
-# tickerList = ["TSLA", "AAPL", "AMZN", "MSFT", ]
 
 file = open('stocks.txt', 'r')
 tickerList = file.readlines()
 file.close()
-#
-# test = "AAPL\\n"
-# print(test)
-# test.split('\\')
-# print(test)
-
-# for i in tickerList:
-#     print(i)
-now = datetime.datetime.now()
-print(now)
-print(now.date())
-
-
-newNow = now.replace(hour=6, minute=00)
-print (newNow)
-
-
-
-# 1) Create contract objects for each ticker. Append to contractList
-# for ticker in tickerList:
-#     contract = (ticker, 'SMART', 'USD')
-#     contractList += contract
-
-
-# 2) Grab realtime market data for each ticker
-# def onPendingTickers(ticker):
-#     print("pending ticker event recieved")
-#     print(ticker)
-#
-# for stock in contractList:
-#     ib.reqMktData(s, '', False, False)
-#     ib.pendingTickersEvent += onPendingTicker
-
-
-# 3) Grab historical data from makret open until now
-# For example, if needing the last week's high value,
-#   grab historical data 7 days back and save the highest value. Use that to compare
-# dt = ''
-# barsList = []
-# while True:
-#     bars = ib.reqHistoricalData(
-#         contract,
-#         endDateTime=dt,
-#         # 252 trading days a year
-#         durationStr='14 D',
-#         barSizeSetting='1 day',
-#         whatToShow='self.trades',
-#         useRTH=True,
-#         formatDate=1)
-#     if not bars:
-#         break
-#     barsList.append(bars)
-#     dt = bars[0].date
-#     print(dt)
-
-# 4) Loop through current strategies
-
-# ib.run()
-
 
 
 class Bot:
     def __init__(self):
-    # BACKTESTING TO BE DONE
-    # self.cash = $100,000
-    # startDate = 01012015
-    # endDate = 12312020
-    # get historical data from SPY and run strategies
-    # keep track of SPY self.shares
         self.cash = 10000
         self.startingCash = self.cash
         self.shares = 0
@@ -92,6 +33,20 @@ class Bot:
         self.trades = []
         self.currentLow = 0;
         self.recentlySold = 0
+        self.sigPriceBuy = []
+        self.sigPriceSell = []
+        self.sma50Tracker = []
+        self.sma100Tracker = []
+        self.sma200Tracker = []
+        self.profits = []
+        self.percentGains = []
+        self.support = 0
+        self.highest = []
+        self.daysLeft = 0
+        total = 0
+        total100 = 0
+        total200 = 0
+        self.pdCash = []
 
 
         contract = Contract()
@@ -103,129 +58,101 @@ class Bot:
 
         self.tickerName = contract.symbol
 
-        dt = '20210101 00:00:00 PST'
-        #dt = ''
-        # self.barsList = []
-        # while True:
-        self.backtestPeriod = '14 Y'
+        #dt = '20210101 00:00:00 PST'
+        dt = ''
+        self.backtestPeriod = '5 Y'
         self.bars = ib.reqHistoricalData(
             contract,
             endDateTime=dt,
-            # 252 trading days a year
             durationStr=self.backtestPeriod,
             barSizeSetting='1 day',
             whatToShow='TRADES',
             useRTH=True,
             formatDate=1)
-            # if not self.bars:
-            #      break
-            # self.barsList.append(self.bars)
-            # dt = self.bars[0].date
-            # print(dt)
         print("Bars size: " + str(len(self.bars)))
         self.dfPanda = util.df(self.bars)
         #print(dfPanda)
         #dfPanda.plot()
         #plt.show()
         self.currentHigh = self.bars[0].high
-        total = 0
-        total100 = 0
-        self.pdCash = []
         self.pdCash.append(self.cash)
-        self.sigPriceBuy = []
-        self.sigPriceSell = []
-        self.sma50Tracker = []
-        self.sma100Tracker = []
-        self.profits = []
-        self.percentGains = []
-        self.support = 0
-        self.highest = []
-        self.daysLeft = 0
 
 
         for b in range(0, len(self.bars)):
-            #print(str(self.bars[b].date))
             self.pdCash.append(self.cash + (self.shares * self.bars[b].close))
-
-#### Check if 3 Days since PTD
-        #    for i in range (-5, 0, 1):
-            #    print(i)
-            #print("Scanning next bar. Current shares: " + str(self.shares) + "\t Current Money: " + str(self.cash))
-            #print("DaysLeft: " + str(self.daysLeft))
-            #print(str(self.bars[b].date.date()) + "   " + str(self.bars[b-1].date.date()))
-
-            # if self.daysLeft == 0:
-            #     #print("CAN TRADE")
-            #     #self.backTestingBreakoutStrategy1(self.bars[b])
-            #     #self.backTestingStrategy1(self.bars[b])
-            #     #self.NioStrategy2(self.bars[b])
-            #     self.backTestingStrategy1_v3(self.bars[b])
-            # elif self.bars[b].date.date() != self.bars[b-1].date.date():
-            #     self.daysLeft -= 1
-            #     self.sigPriceBuy.append(np.nan)
-            #     self.sigPriceSell.append(np.nan)
-            # else:
-            #     self.sigPriceBuy.append(np.nan)
-            #     self.sigPriceSell.append(np.nan)
 
             SevenDays = []
             for m in range(b-7, b):
                 SevenDays.append(self.bars[m].close)
-            print(str(len(SevenDays)))
             self.days7_Low = min(SevenDays)
             self.days7_High = max(SevenDays)
-            #strat 2#################################
+
+            passHighToCheck = []
+            for m in range(b-60, b):
+                passHighToCheck.append(self.bars[m].close)
+            self.highToCheck2 = max(passHighToCheck)
+
+            # Calculate 50 SMA
             if b > 50:
-                #print("Here")
                 for i in range (b-50, b):
                     total += self.bars[i].close
                 self.sma50 = total/50
                 self.sma50Tracker.append(self.sma50)
-                # self.sma100Tracker.append(np.nan)
                 total = 0
-                #print("SMA: " + str(self.sma50))
+            else:
+                self.sma50 = np.nan
+                self.sma50Tracker.append(np.nan)
+
+            # Calculate 100 SMA
+            if b > 100:
+                for i in range (b-100, b):
+                    total100 += self.bars[i].close
+                    self.highest.append(self.bars[i].open)
+                self.sma100 = total100/100
+                self.highestOpenLast100Bars = max(self.highest)
+                self.highest.clear()
+                total100 = 0
+                self.sma100Tracker.append(self.sma100)
+            else:
+                self.sma100 = np.nan
+                self.sma100Tracker.append(np.nan)
+
+            # Calculate 200 SMA
+            if b > 200:
+                for i in range (b-200, b):
+                    total200 += self.bars[i].close
+                self.sma200 = total200/200
+                total200 = 0
+                self.sma200Tracker.append(self.sma200)
+            else:
+                self.sma200 = np.nan
+                self.sma200Tracker.append(np.nan)
+
+
+            print(self.bars[b].date)
+            if self.daysLeft == 0:
+                print("CAN TRADE")
+                #self.test7day(self.bars[b], self.days7_Low, self.days7_High, self.sma200)
+                #self.backTestingBreakoutStrategy1(self.bars[b], self.highestOpenLast100Bars)
                 #self.backTestingStrategy2(self.bars[b], self.sma50)
                 #self.backTestingStrategy4(self.bars[b],self.sma50)
-                if b > 200:
-                    for i in range (b-200, b):
-                        total100 += self.bars[i].close
-                        self.highest.append(self.bars[i].open)
-                    self.sma100 = total100/200
-                    self.highestOpenLast100Bars = max(self.highest)
-                    #print("On bar #" + str(b) + " -- highToCheck: " + str(self.highestOpenLast100Bars))
-                    #print("From: " + str(self.highest))
-                    self.highest.clear()
-                    total100 = 0
-                    self.sma100Tracker.append(self.sma100)
+                #self.backTestingBreakoutStrategy1(self.bars[b], self.highestOpenLast100Bars)
+                #self.backTestingStrategy_50cross100(self.bars[b], self.sma50, self.sma100)
 
-                    print(self.bars[b].date)
-                    if self.daysLeft == 0:
-                        print("CAN TRADE")
-                        self.test7day(self.bars[b], self.days7_Low, self.days7_High, self.sma100)
-                        #self.backTestingBreakoutStrategy1(self.bars[b], self.highestOpenLast100Bars)
-                    elif self.bars[b].date != self.bars[b-1].date:
-                        self.daysLeft -= 1
-                        self.sigPriceBuy.append(np.nan)
-                        self.sigPriceSell.append(np.nan)
-                    else:
-                        self.sigPriceBuy.append(np.nan)
-                        self.sigPriceSell.append(np.nan)
-
-
-                #    self.backTestingBreakoutStrategy1(self.bars[b], self.highestOpenLast100Bars)
-                    #self.backTestingStrategy_50cross100(self.bars[b], self.sma50, self.sma100)
-                else:
-                # Uncomment if using backTestingStrategy_50cross100
-                    self.sigPriceBuy.append(np.nan)
-                    self.sigPriceSell.append(np.nan)
-                    self.sma100Tracker.append(np.nan)
-            else:
-                self.sma50Tracker.append(np.nan)
-                self.sma100Tracker.append(np.nan)
-            # Uncomment if using backTestingStrategy2 or 4, or if using backTestingStrategy_50cross100
+                #self.backTestingBreakoutStrategy1(self.bars[b], self.highToCheck2)
+                #     #self.backTestingStrategy1(self.bars[b])
+                #     #self.NioStrategy2(self.bars[b])
+                #     self.backTestingStrategy1_v3(self.bars[b])
+                self.backTestingStrategy1_v2(self.bars[b])
+            elif self.bars[b].date != self.bars[b-1].date:
+                self.daysLeft -= 1
                 self.sigPriceBuy.append(np.nan)
                 self.sigPriceSell.append(np.nan)
-            #print(b.close)##################################################
+            else:
+                self.sigPriceBuy.append(np.nan)
+                self.sigPriceSell.append(np.nan)
+
+        # Sell reaming shares at last bar close
         if self.shares > 0:
             self.cash += self.shares * self.bars[len(self.bars)-1].close
             self.pdCash.append(self.cash)
@@ -235,11 +162,13 @@ class Bot:
         plt.figure(figsize=(12.6, 4.6))
         self.dfPanda['50SMA'] = self.sma50Tracker
         self.dfPanda['100SMA'] = self.sma100Tracker
+        self.dfPanda['200SMA'] = self.sma200Tracker
         self.dfPanda['Buy_Signal'] = self.sigPriceBuy
         self.dfPanda['Sell_Signal'] = self.sigPriceSell
         plt.plot(self.dfPanda['close'], label = 'Close', alpha = 0.35)
         plt.plot(self.dfPanda['50SMA'], label = '50SMA', alpha = 0.35)
         plt.plot(self.dfPanda['100SMA'], label = '100SMA', alpha = 0.35)
+        plt.plot(self.dfPanda['200SMA'], label = '200SMA', alpha = 0.35)
         plt.scatter(self.dfPanda.index, self.dfPanda['Buy_Signal'], label = 'Buy', marker = '^', color = 'green')
         plt.scatter(self.dfPanda.index, self.dfPanda['Sell_Signal'], label = 'Sell', marker = 'v', color = 'red')
         plt.title(self.tickerName + ": Start: \$" + str(round(self.startingCash,2)) + " ---> \$" + str(round(self.cash,2)) + "   (" +str(round(((self.cash-self.startingCash)/self.startingCash)*100,2)) + "%)" )
@@ -253,21 +182,12 @@ class Bot:
         print("% Gain/Loss: " + str(((self.cash-self.startingCash)/self.startingCash)*100) + "%")
         print("Ending shares: " + str(self.shares))
         print("Number of trades made: " + str(len(self.trades)))
-        # print("self.trades:")
         f = open("trades.csv", "w", newline = '')
         writer = csv.writer(f)
         writer.writerow([" "," "," "," "," "," ","Totals:", self.cash-self.startingCash, ((self.cash-self.startingCash)/self.startingCash)*100])
         for i in range (0, len(self.trades)):
-            #writer.writerow([i[:10], i[11:15], i[-6:], i[29:31]])
-            #print(i[0], i[1], i[2], i[3])
-            #writer.writerow([i[0], i[1], i[2], i[3], i[4], i[5]])
             writer.writerow([self.trades[i][0], self.trades[i][1], self.trades[i][2], self.trades[i][3], self.trades[i][4], self.trades[i][5], ' ', round(self.profits[i],2), self.percentGains[i]])
-            #print(i)
         f.close()
-
-        #for i in range (0, len(self.profits)):
-            #print(str(round(self.profits[i],2)) + "   " + str(round(self.percentGains[i],2)))
-
         plt.show()
 
 
@@ -307,7 +227,7 @@ class Bot:
     def test7day(self, bar, dayLow7, dayHigh7, ma200):
         if (bar.close < dayLow7) and (bar.close > ma200) and (self.opentrades < 1):
             self.historicalPlaceBuyOrder(bar.close, bar.date)
-            self.stopLoss = bar.close * 0.75
+            self.stopLoss = bar.close * 0.10
             self.sigPriceBuy.append(bar.close)
             self.sigPriceSell.append(np.nan)
             self.opentrades = 1
@@ -453,40 +373,37 @@ class Bot:
     #       NOT IMPLEMENTED YET:   if falls 2% below 50SMA ---> sell
     #       set a trailing stop loss otherwise 2%
     def backTestingStrategy4(self, bar, sma50):
-        if bar.low >= sma50:
-            isAbove50SMA = True
-        else:
-            isAbove50SMA = False
-        if (isAbove50SMA) and (bar.low >= sma50 * 0.98) and (self.opentrades < 1):
-            self.currentHigh = bar.high
-            self.historicalPlaceBuyOrder(bar.open, bar.date)
-            self.sigPriceBuy.append(bar.open)
-            self.sigPriceSell.append(np.nan)
-            self.opentrades = 1
-        elif self.opentrades >= 1:
-            if bar.close < self.currentHigh*0.97:
-                self.historicalPlaceSellOrder(bar.close, bar.date)
-                self.sigPriceSell.append(bar.close)
-                self.sigPriceBuy.append(np.nan)
-                self.opentrades = 0
+        if sma50 != np.nan:
+
+            if bar.low >= sma50:
+                isAbove50SMA = True
             else:
+                isAbove50SMA = False
+            if (isAbove50SMA) and (bar.low >= sma50 * 0.98) and (self.opentrades < 1):
+                self.currentHigh = bar.high
+                self.historicalPlaceBuyOrder(bar.open, bar.date)
+                self.sigPriceBuy.append(bar.open)
                 self.sigPriceSell.append(np.nan)
+                self.opentrades = 1
+            elif self.opentrades >= 1:
+                if bar.close < self.currentHigh*0.97:
+                    self.historicalPlaceSellOrder(bar.close, bar.date)
+                    self.sigPriceSell.append(bar.close)
+                    self.sigPriceBuy.append(np.nan)
+                    self.opentrades = 0
+                else:
+                    self.sigPriceSell.append(np.nan)
+                    self.sigPriceBuy.append(np.nan)
+            else:
                 self.sigPriceBuy.append(np.nan)
+                self.sigPriceSell.append(np.nan)
+            if bar.high > self.currentHigh:
+                self.currentHigh = bar.high
         else:
             self.sigPriceBuy.append(np.nan)
             self.sigPriceSell.append(np.nan)
-        if bar.high > self.currentHigh:
-            self.currentHigh = bar.high
 
     def backTestingStrategy_50cross100(self, bar, ma50, ma100):
-        # if bar.low >= sma50:
-        #     isAbove50SMA = True
-        # else:
-        #     isAbove50SMA = False
-        # if bar.low >= sma100:
-        #     isAbove100SMA = True
-        # else:
-        #     isAbove100SMA = False
         if (self.opentrades < 1) and (ma50 > ma100):
             print("BUYING -- 50: " + str(ma50) + "  100: " + str(ma100))
             self.currentHigh = bar.high
@@ -618,49 +535,6 @@ class Bot:
 
 
 bot = Bot()
-################# 50 MA ####################
-#
-#     def sma50(ticker) --> returns 50ma int
-#
-# contract = Contract()
-# contract.symbol = "AAPL"
-# contract.secType = "STK"
-# contract.exchange = "SMART"
-# contract.currency = "USD"
-# contract.primaryExchange = "NASDAQ"
-#
-# dt = ''
-# maBarsList = []
-# maBars = ib.reqHistoricalData(
-#     contract,
-#     endDateTime=dt,
-#     # 252 trading days a year
-#     durationStr='50 D',
-#     barSizeSetting='1 day',
-#     whatToShow='TRADES',
-#     useRTH=True,
-#     formatDate=1)
-# ######maBarsList.append(maBars)
-# ######dt = maBars[0].date
-# ######print(dt)
-# total = 0
-# count = 1
-# for b in range (0, len(maBars)):
-#     total += maBars[b].close
-#     #print(count)
-#     #print(maBars[b].close)
-#     #count += 1
-# # for b in range (0, len(maBars)-1):
-# #     total += maBars[b].close
-# #     print(count)
-# #     print(maBars[b].close)
-# #     count += 1
-# sma = total / 50
-#
-# #print(sma)
-
-
-
 
 # STRATEGY IDEAS
 #
