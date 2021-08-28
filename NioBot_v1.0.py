@@ -87,32 +87,33 @@ class NioBot:
 
     def catchUp(self, contract):
         total = []
-        # bars1 = ib.reqHistoricalData(
-        #     contract,
-        #     endDateTime='',
-        #     durationStr='60 S',
-        #     barSizeSetting='1 secs',
-        #     whatToShow='TRADES',
-        #     useRTH=True,
-        #     formatDate=1,
-        #     keepUpToDate=True)
-        #     #time.sleep(2)
-        # for i in bars1:
-        #     total.append(i.high)
-        # self.currentHOD = max(total)
-        # self.currentLOD = min(total)
-        # total.clear()
-        # self.currentHigh = self.currentHOD
-        # self.currentLow = self.currentLOD
-        bars = ib.reqRealTimeBars(contract, 1, 'MIDPOINT', False)
+        bars1 = ib.reqHistoricalData(
+            contract,
+            endDateTime='',
+            durationStr='1 D',
+            barSizeSetting='1 min',
+            whatToShow='TRADES',
+            useRTH=True,
+            formatDate=1)
+            #time.sleep(2)
+        for i in bars1:
+            total.append(i.high)
+        self.currentHOD = max(total)
+        #self.currentLOD = min(total)
+        total.clear()
+        self.currentHigh = self.currentHOD
+        self.highToCheck = self.currentHigh
+        #self.currentLow = self.currentLOD
+        bars = ib.reqRealTimeBars(contract, 1, 'TRADES', False)
         bars.updateEvent += self.onBarUpdate
         #print(len(self.bars))
 
     def onBarUpdate(self, bar, hasNewBar):
         print("pending bar event recieved")
-        print("open: " + str(bar[-1].open_))
-        self.backTestingStrategy1_v3(bar[-1])
-        #print(bar[-1].close)
+        #print("open: " + str(bar[-1].open_))
+        #self.backTestingStrategy1_v3(bar)
+        self.backTestingBreakoutStrategy1(bar[-1], self.highToCheck)
+        print(bar[-1])
 
     # def NioStrategy1(self, bar):
     #     if (bar.open <= self.currentHigh * 0.98) and (self.opentrades < 1) and (self.recentlySold < 1):
@@ -218,6 +219,31 @@ class NioBot:
                 self.currentLow = bar.low
         if bar.close > self.currentHigh:
             self.currentHigh = bar.close
+        if bar.low < self.currentLow:
+            self.currentLow = bar.low
+
+    def backTestingBreakoutStrategy1(self, bar, highToCheck):
+        #print(str(self.opentrades))
+        print(str(self.currentLow))
+        if (bar.open_ > highToCheck) and (self.opentrades < 1) and self.recentlySold < 1:
+            print("BUYING... highToCheck: " + str(highToCheck))
+            self.historicalPlaceBuyOrder(bar.open_, bar.date)
+            self.support = highToCheck
+            self.opentrades = 1
+        elif (bar.open_ >= self.currentLow * 1.01) and (self.opentrades < 1) and (bar.open_ > highToCheck) and (self.recentlySold >= 1):
+            print("BUYING #2... highToCheck: " + str(highToCheck) + "   currentLow: " + str(self.currentLow))
+            self.currentHigh = bar.close
+            self.historicalPlaceBuyOrder(bar.open_, bar.date)
+            self.opentrades = 1
+        elif self.opentrades >= 1:
+            if bar.open_ < self.support*0.99 or bar.open_ < self.currentHigh*0.955:
+                self.historicalPlaceSellOrder(bar.open_, bar.date)
+                self.opentrades = 0
+                self.recentlySold = 1
+                self.currentLow = bar.low
+                self.currentHigh = bar.open_
+        if bar.open_ > self.currentHigh:
+            self.currentHigh = bar.open_
         if bar.low < self.currentLow:
             self.currentLow = bar.low
 
