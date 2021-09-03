@@ -1,8 +1,23 @@
 from ib_insync import *
-from datetime import datetime
+from datetime import datetime, time, timedelta
+#import datetime
 import numpy as np
 import time
 import math
+import nest_asyncio
+from functools import partial
+
+nest_asyncio.apply()
+
+"""
+ To Do:
+    -- Make it so when a buy order is placed, the current ticker is tracked and only that one
+       is scanned, then keep track of those lows and only sell that one?
+
+       if recently sold == 1 then all tickers, even if not bought, will try to sell
+
+"""
+
 
 ib = IB()
 ib.connect('127.0.0.1', 7497, clientId=1)
@@ -18,6 +33,9 @@ class NioBot:
         self.currentLow = 0
         self.opentrades = 0
         self.recentlySold = 0
+        self.currentLOD = 0
+        self.support = 0
+
 
         sub = ScannerSubscription(
             instrument='STK',
@@ -36,84 +54,135 @@ class NioBot:
         symbols = [sd.contractDetails.contract.symbol for sd in scanData]
         print(symbols)
 
+        tillMorning = (self.now-self.dayStart).total_seconds()
+        print(tillMorning)
+        print(tillMorning/60)
+        print((tillMorning/60)/60)
 
+        newMorn = str(math.floor(tillMorning)) + " S"
+        print(newMorn)
 
         #
         # for i in symbols:
         #     print(i)
-        #     stock = Stock(i, 'SMART', 'USD')
-        #     market_data = ib.reqMktData(stock, '', False, False)
+        #stock = Stock("ANY", 'SMART', 'USD')
+        #market_data = ib.reqMktData(stock, '', False, False)
         #     time.sleep(2)
-        #     ib.pendingTickersEvent += self.onPendingTicker
+        #ib.pendingTickersEvent += self.onPendingTicker
         #self.catchUp(stock)
         #self.scannerTest()
 
-        # for i in symbols:
-        #     print(i)
-        stock = Stock('AAPL', 'SMART', 'USD')
-        self.catchUp(stock)
+        # self.contract = Contract()
+        # self.contract.symbol = "SQBG"
+        # self.contract.secType = "STK"
+        # self.contract.exchange = "SMART"
+        # self.contract.currency = "USD"
+        # self.contract.primaryExchange = "NASDAQ"
+
+        for i in symbols:
+            print(i)
+            stock = Stock("BTCM", 'SMART', 'USD')
+            #self.catchUp(stock)
+            bars = ib.reqRealTimeBars(contract, 1, 'TRADES', False)
+            bars.updateEvent += self.onBarUpdate
+
+
             #time.sleep(2)
             #market_data = ib.reqMktData(stock, '', False, False)
             #ib.pendingTickersEvent += self.onPendingTicker
+        time.sleep(2)
         ib.run()
 
 
-    def onPendingTicker(self, ticker):
-        print("pending ticker event recieved")
-        print(ticker)
-        #print(type(ticker))
-        # d = {i: (c.contract.symbol, c.close) for (i, c) in enumerate(tickers)}
-        # ib.loopUntil(any(np.isnan(val) for val in d.values()), len(tickers))
-        #self.NioStrategy2(ticker)
+    # def onPendingTicker(self, ticker):
+    #     print("pending ticker event recieved")
+    #     print(ticker)
+    #     #print(type(ticker))
+    #     # d = {i: (c.contract.symbol, c.close) for (i, c) in enumerate(tickers)}
+    #     # ib.loopUntil(any(np.isnan(val) for val in d.values()), len(tickers))
+    #     #self.NioStrategy2(ticker)
 
-    def scannerTest(self):
-        sub = ScannerSubscription(
-            instrument='STK',
-            locationCode='STK.US.MAJOR',
-            scanCode='TOP_PERC_GAIN')
+    # def scannerTest(self):
+    #     sub = ScannerSubscription(
+    #         instrument='STK',
+    #         locationCode='STK.US.MAJOR',
+    #         scanCode='TOP_PERC_GAIN')
+    #
+    #     tagValues = [
+    #         TagValue("changePercAbove", "20"),
+    #         TagValue('priceAbove', 1),
+    #         TagValue('priceBelow', 50),
+    #         TagValue('volumeAbove', 200000)]
+    #
+    #     # the tagValues are given as 3rd argument; the 2nd argument must always be an empty list
+    #     # (IB has not documented the 2nd argument and it's not clear what it does)
+    #     scanData = ib.reqScannerData(sub, [], tagValues)
+    #
+    #     symbols = [sd.contractDetails.contract.symbol for sd in scanData]
+    #     print(symbols)
 
-        tagValues = [
-            TagValue("changePercAbove", "20"),
-            TagValue('priceAbove', 1),
-            TagValue('priceBelow', 50),
-            TagValue('volumeAbove', 200000)]
+    # def catchUp(self, contract):
+    #     total = []
+    #     # bars1 = ib.reqHistoricalData(
+    #     #     contract,
+    #     #     endDateTime='',
+    #     #     durationStr='7200 S',
+    #     #     barSizeSetting='1 min',
+    #     #     whatToShow='TRADES',
+    #     #     useRTH=True,
+    #     #     formatDate=1)
+    #     #     #time.sleep(2)
+    #     # for i in bars1:
+    #     #     total.append(i.high)
+    #     # self.currentHOD = max(total)
+    #     # self.currentLOD = min(total)
+    #     # total.clear()
+    #     # self.currentHigh = self.currentHOD
+    #     # self.highToCheck = self.currentHigh
+    #     # self.currentLow = self.currentLOD
+    #     bars = ib.reqRealTimeBars(contract, 1, 'TRADES', False)
+    #     bars.updateEvent += self.onBarUpdate
+    #     #bars.updateEvent += partial(self.onBarUpdate, contract)
+    #     #print(len(self.bars))
 
-        # the tagValues are given as 3rd argument; the 2nd argument must always be an empty list
-        # (IB has not documented the 2nd argument and it's not clear what it does)
-        scanData = ib.reqScannerData(sub, [], tagValues)
-
-        symbols = [sd.contractDetails.contract.symbol for sd in scanData]
-        print(symbols)
-
-    def catchUp(self, contract):
+    def onBarUpdate(self, bar, hasNewBar):
+        print("pending bar event recieved")
+        self.now = datetime.now()
+        tillMorning = (self.now-self.dayStart).total_seconds()
+        newMorn = str(math.floor(tillMorning)) + " S"
         total = []
-        bars1 = ib.reqHistoricalData(
-            contract,
+        print("Contract: " + str(bar.contract.symbol))
+        bars2hoursBack = ib.reqHistoricalData(
+            bar.contract,
             endDateTime='',
-            durationStr='1 D',
+            durationStr=newMorn,
             barSizeSetting='1 min',
             whatToShow='TRADES',
             useRTH=True,
             formatDate=1)
-            #time.sleep(2)
-        for i in bars1:
+        print("SIZE: " + str(len(bars2hoursBack)))
+        for i in bars2hoursBack:
             total.append(i.high)
-        self.currentHOD = max(total)
-        #self.currentLOD = min(total)
+        #total.sort()
+        #print(total)
+        #print(max(total))
+        self.highToCheck = max(total[:-2])
+        #time.sleep(2)
+        #print(self.highToCheck)
+        self.lowToCheck = max(total[-60:-2])
         total.clear()
-        self.currentHigh = self.currentHOD
-        self.highToCheck = self.currentHigh
-        #self.currentLow = self.currentLOD
-        bars = ib.reqRealTimeBars(contract, 1, 'TRADES', False)
-        bars.updateEvent += self.onBarUpdate
-        #print(len(self.bars))
-
-    def onBarUpdate(self, bar, hasNewBar):
-        print("pending bar event recieved")
+        #print("Size: " + str(len(total)))
+        #total.clear()
+        # self.currentHigh = self.highToCheck
+        # self.highToCheck = self.currentHigh
         #print("open: " + str(bar[-1].open_))
         #self.backTestingStrategy1_v3(bar)
-        self.backTestingBreakoutStrategy1(bar[-1], self.highToCheck)
+
+        # Only trade after 5 mins
+        if len(bars2hoursBack > 4):
+            self.backTestingBreakoutStrategy1(bar[-1], self.highToCheck, self.lowToCheck, bar.contract.symbol)
         print(bar[-1])
+        #print(bar[-1].high)
 
     # def NioStrategy1(self, bar):
     #     if (bar.open <= self.currentHigh * 0.98) and (self.opentrades < 1) and (self.recentlySold < 1):
@@ -222,34 +291,36 @@ class NioBot:
         if bar.low < self.currentLow:
             self.currentLow = bar.low
 
-    def backTestingBreakoutStrategy1(self, bar, highToCheck):
+    def backTestingBreakoutStrategy1(self, bar, highToCheck, lowToCheck, ticker):
         #print(str(self.opentrades))
-        print(str(self.currentLow))
+        print("high to check: " + str(highToCheck))
+        print("price to sell:  if below " + str(lowToCheck*0.975) + "  or  if below " + str(highToCheck*0.95))
+        #print("price to buy: " + str(highToCheck*1.005))
         if (bar.open_ > highToCheck) and (self.opentrades < 1) and self.recentlySold < 1:
             print("BUYING... highToCheck: " + str(highToCheck))
-            self.historicalPlaceBuyOrder(bar.open_, bar.date)
-            self.support = highToCheck
+            self.historicalPlaceBuyOrder(bar.open_, bar.time, ticker)
+            # self.support = highToCheck
             self.opentrades = 1
-        elif (bar.open_ >= self.currentLow * 1.01) and (self.opentrades < 1) and (bar.open_ > highToCheck) and (self.recentlySold >= 1):
+        elif (bar.open_ >= lowToCheck * 1.01) and (self.opentrades < 1) and (bar.open_ > highToCheck) and (self.recentlySold >= 1):
             print("BUYING #2... highToCheck: " + str(highToCheck) + "   currentLow: " + str(self.currentLow))
-            self.currentHigh = bar.close
-            self.historicalPlaceBuyOrder(bar.open_, bar.date)
+            # self.curren tHigh = bar.close
+            self.historicalPlaceBuyOrder(bar.open_, bar.time, ticker)
             self.opentrades = 1
         elif self.opentrades >= 1:
-            if bar.open_ < self.support*0.99 or bar.open_ < self.currentHigh*0.955:
-                self.historicalPlaceSellOrder(bar.open_, bar.date)
+            if bar.open_ < lowToCheck*0.975 or bar.open_ < highToCheck*0.95:
+                self.historicalPlaceSellOrder(bar.open_, bar.time, ticker)
                 self.opentrades = 0
                 self.recentlySold = 1
-                self.currentLow = bar.low
-                self.currentHigh = bar.open_
-        if bar.open_ > self.currentHigh:
-            self.currentHigh = bar.open_
-        if bar.low < self.currentLow:
-            self.currentLow = bar.low
+                # self.currentLow = bar.low
+                # self.currentHigh = bar.open_
+        # if bar.open_ > self.currentHigh:
+        #     self.currentHigh = bar.open_
+        # if bar.low < self.currentLow:
+        #     self.currentLow = bar.low
 
-    def historicalPlaceBuyOrder(self, buyIn, time):
+    def historicalPlaceBuyOrder(self, buyIn, time, ticker):
         #stock = Stock(ticker, 'SMART', 'USD')
-        stock = Stock('AAPL', 'SMART', 'USD')
+        stock = Stock(ticker, 'SMART', 'USD')
 
         # raw_balance = ib.accountSummary('DU4271259')
         # for av in raw_balance:
@@ -258,16 +329,16 @@ class NioBot:
 
         order = MarketOrder('BUY', 20)
         trade = ib.placeOrder(stock, order)
-        print(str(datetime.now()) + " -- " + str(20) + " shares of " + ticker.symbol + " bought at $")
+        #print(str(datetime.now()) + " -- " + str(20) + " shares of " + ticker.symbol + " bought at $")
         print("BUYING")
 
 
-    def historicalPlaceSellOrder(self, ticker, sellOut):
-        # stock = Stock(ticker, 'SMART', 'USD')
+    def historicalPlaceSellOrder(self, sellOut, time, ticker):
+        stock = Stock(ticker, 'SMART', 'USD')
         # openPositions = ib.positions()
         # shares = openPositions[0].position
-        # order = MarketOrder('Sell', shares)
-        # trade = ib.placeOrde(stock, order)
+        order = MarketOrder('Sell', 20)
+        trade = ib.placeOrder(stock, order)
         # print(str(datetime.now()) + " -- " + str(shares) + " shares of " + ticker.symbol + " sold at $" + str(sellOut))
         print("Selling")
 

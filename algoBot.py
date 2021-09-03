@@ -1,5 +1,5 @@
 from ib_insync import *
-import datetime
+from datetime import time, datetime
 import math
 import csv
 import pandas as pd
@@ -50,7 +50,7 @@ class Bot:
 
 
         contract = Contract()
-        contract.symbol = "CMMB"
+        contract.symbol = "ANY"
         contract.secType = "STK"
         contract.exchange = "SMART"
         contract.currency = "USD"
@@ -88,9 +88,10 @@ class Bot:
             self.days7_High = max(SevenDays)
 
             passHighToCheck = []
-            for m in range(b-60, b):
+            for m in range(b-58, b):
                 passHighToCheck.append(self.bars[m].close)
             self.highToCheck2 = max(passHighToCheck)
+            passHighToCheck.clear()
 
             # Calculate 50 SMA
             if b > 50:
@@ -130,7 +131,9 @@ class Bot:
 
 
             print(self.bars[b].date)
+            print(self.bars[b])
             if self.daysLeft == 0:
+                #and self.bars[b].date.time() > time(10,0,0):
                 print("CAN TRADE")
                 #self.test7day(self.bars[b], self.days7_Low, self.days7_High, self.sma200)
                 #self.backTestingBreakoutStrategy1(self.bars[b], self.highestOpenLast100Bars)
@@ -138,7 +141,7 @@ class Bot:
                 #self.backTestingStrategy4(self.bars[b],self.sma50)
                 #self.backTestingBreakoutStrategy1(self.bars[b], self.highestOpenLast100Bars)
                 #self.backTestingStrategy_50cross100(self.bars[b], self.sma50, self.sma100)
-
+                print(str(self.highToCheck2))
                 self.backTestingBreakoutStrategy2(self.bars[b], self.highToCheck2)
                 #     #self.backTestingStrategy1(self.bars[b])
                 #     #self.NioStrategy2(self.bars[b])
@@ -220,6 +223,32 @@ class Bot:
 
         self.daysLeft = 2
         #self.pdCash.append(self.cash)
+
+    def backTestingBreakoutStrategy3(self, bar, highToCheck):
+        #print(str(self.opentrades))
+        print("high o check: " + str(highToCheck))
+        print(str(self.currentLow))
+        if (bar.open_ > highToCheck *1.025) and (self.opentrades < 1) and self.recentlySold < 1:
+            print("BUYING... highToCheck: " + str(highToCheck))
+            self.historicalPlaceBuyOrder(bar.open_, bar.date)
+            self.support = highToCheck
+            self.opentrades = 1
+        elif (bar.open_ >= self.currentLow * 1.01) and (self.opentrades < 1) and (bar.open_ > highToCheck) and (self.recentlySold >= 1):
+            print("BUYING #2... highToCheck: " + str(highToCheck) + "   currentLow: " + str(self.currentLow))
+            self.currentHigh = bar.close
+            self.historicalPlaceBuyOrder(bar.open_, bar.date)
+            self.opentrades = 1
+        elif self.opentrades >= 1:
+            if bar.open_ < self.support*0.975 or bar.open_ < self.currentHigh*0.95:
+                self.historicalPlaceSellOrder(bar.open_, bar.date)
+                self.opentrades = 0
+                self.recentlySold = 1
+                self.currentLow = bar.low
+                self.currentHigh = bar.open_
+        if bar.open_ > self.currentHigh:
+            self.currentHigh = bar.open_
+        if bar.low < self.currentLow:
+            self.currentLow = bar.low
 
     # Daily Candles only
     # Buy: current day closes below 7 day low AND closes above 200sma
@@ -535,7 +564,11 @@ class Bot:
 
     #For small cap stocks
     def backTestingBreakoutStrategy2(self, bar, highToCheck):
+        print(bar)
         #print(str(self.opentrades))
+        print("high to check: " + str(highToCheck))
+        print("opentrades: " + str(self.opentrades))
+        print("recentSold: " + str(self.recentlySold))
         print(str(self.currentLow))
         if (bar.open > highToCheck) and (self.opentrades < 1) and self.recentlySold < 1:
             print("BUYING... highToCheck: " + str(highToCheck))
@@ -554,7 +587,7 @@ class Bot:
             self.sigPriceSell.append(np.nan)
             self.opentrades = 1
         elif self.opentrades >= 1:
-            if bar.open < self.support*0.955 or bar.open < self.currentHigh*0.955:
+            if bar.open < self.support*0.95 or bar.open < self.currentHigh*0.965:
                 self.historicalPlaceSellOrder(bar.open, bar.date)
                 self.sigPriceSell.append(bar.open)
                 self.sigPriceBuy.append(np.nan)
