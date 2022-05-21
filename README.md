@@ -78,6 +78,12 @@ We use a different class to define a contract in liveBot.py:
 
     stock = Stock("SPY", 'SMART', 'USD')
     
+Lastly, you need to choose your strategy. There are a number of predefined strategies, all sperated into their own functions. You will call the chosen strategy function at line 147 in backtesting.py, and line 91 in liveBot.py.
+
+Here is an example code snippet of a strategy being called (from backtesting.py):
+
+    self.backTesting_breakout(self.bars[b], self.highToCheck2)
+    
 You can now run either liveBot.py or backtesting.py just as you would any other python file, with no additional arguemnts.
 
 ### Backtesting Bot
