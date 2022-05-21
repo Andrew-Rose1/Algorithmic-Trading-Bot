@@ -14,7 +14,9 @@ Below is the code snippet where you define your port. In this example, port 7947
     ib = IB()
     ib.connect('127.0.0.1', 7497, clientId=2)
   
-The Results folder includes some sample backtesting results.
+The Results folder includes some sample backtesting results. The columns are as follows:
+
+    Ticker | Date | Shares | Price | Order Type | P/L $ | P/L %
 
 There are additional resources at the end of this README
 
