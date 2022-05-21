@@ -1,6 +1,5 @@
 from ib_insync import *
 from datetime import datetime, time, timedelta
-#import datetime
 import numpy as np
 import time
 import math
@@ -16,7 +15,7 @@ nest_asyncio.apply()
 ib = IB()
 ib.connect('127.0.0.1', 7497, clientId=1)
 
-class NioBot:
+class liveBot:
     def __init__(self):
         self.now = datetime.now()
         self.dayStart = self.now.replace(hour=6, minute=30, second=0)
@@ -26,6 +25,7 @@ class NioBot:
         self.recentlySold = 0
         self.currentLOD = 0
         self.support = 0
+
 
         sub = ScannerSubscription(
             instrument='STK',
@@ -43,14 +43,25 @@ class NioBot:
         scanData = ib.reqScannerData(sub, [], tagValues)
         symbols = [sd.contractDetails.contract.symbol for sd in scanData]
 
+        # Use this code block to utilize the stock scanner
+        ################################################################
+        # for i in symbols:
+        #     stock = Stock(i, 'SMART', 'USD')
+        #     bars = ib.reqRealTimeBars(stock, 1, 'TRADES', False)
+        #     bars.updateEvent += self.onBarUpdate
+        # time.sleep(1)
+        ################################################################
+
+        # Use this code block to only watch one ticket
+        ################################################################
+        stock = Stock(i, 'SMART', 'USD')
+        bars = ib.reqRealTimeBars(stock, 1, 'TRADES', False)
+        bars.updateEvent += self.onBarUpdate
+        ################################################################
+
+
         tillMorning = (self.now-self.dayStart).total_seconds()
         newMorn = str(math.floor(tillMorning)) + " S"
-
-        for i in symbols:
-            stock = Stock(i, 'SMART', 'USD')
-            bars = ib.reqRealTimeBars(stock, 1, 'TRADES', False)
-            bars.updateEvent += self.onBarUpdate
-        time.sleep(1)
         ib.run()
 
 
@@ -185,4 +196,4 @@ class NioBot:
     
 
 
-NioBot = NioBot()
+NioBot = liveBot()

@@ -144,7 +144,7 @@ class Bot:
 
             # Call any Trading Strategy
             # Paramaters (current bar data, ...)
-            self.backTestingBreakoutStrategy2(self.bars[b], self.highToCheck2)
+            self.backTesting_breakout(self.bars[b], self.highToCheck2)
 
 
         # On lats bar: Sell reaming shares at bar close price
